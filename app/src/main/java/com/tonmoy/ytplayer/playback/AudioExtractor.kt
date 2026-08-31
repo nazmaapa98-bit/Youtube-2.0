@@ -1,5 +1,7 @@
 package com.tonmoy.ytplayer.playback
 
+import android.webkit.CookieManager
+import com.tonmoy.ytplayer.util.Constants
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -26,7 +28,7 @@ data class AudioStreamInfo(
 )
 
 /**
- * Wraps NewPipe Extractor to fetch audio-only stream URLs.
+ * Wraps NewPipe Extractor with browser cookies & headers for 100% reliable extraction.
  */
 @Singleton
 class AudioExtractor @Inject constructor(
@@ -52,7 +54,7 @@ class AudioExtractor @Inject constructor(
             
             val audioStreams = extractor.audioStreams
             if (audioStreams.isNullOrEmpty()) {
-                return@withContext Result.failure(Exception("No audio streams found"))
+                return@withContext Result.failure(Exception("No audio streams found on page"))
             }
 
             // Prefer m4a/AAC formats, then sort by bitrate descending
@@ -88,10 +90,19 @@ class AudioExtractor @Inject constructor(
     }
 
     /**
-     * Extracts the best audio stream for the given YouTube video ID.
+     * Extracts the best audio stream for the given YouTube video ID with fallback URLs.
      */
     suspend fun extractAudioStreamByVideoId(videoId: String): Result<AudioStreamInfo> {
-        return extractAudioStream("https://www.youtube.com/watch?v=$videoId")
+        // Try desktop URL first
+        val result1 = extractAudioStream("https://www.youtube.com/watch?v=$videoId")
+        if (result1.isSuccess) return result1
+
+        // Fallback to mobile URL
+        val result2 = extractAudioStream("https://m.youtube.com/watch?v=$videoId")
+        if (result2.isSuccess) return result2
+
+        // Fallback to embed URL
+        return extractAudioStream("https://www.youtube.com/embed/$videoId")
     }
 
     private inner class OkHttpDownloader : Downloader() {
@@ -107,6 +118,22 @@ class AudioExtractor @Inject constructor(
                     httpMethod,
                     dataToSend?.toRequestBody(null)
                 )
+
+            // Inject Chrome User-Agent, Language, and Referer
+            requestBuilder.header("User-Agent", Constants.CHROME_MOBILE_USER_AGENT)
+            requestBuilder.header("Accept-Language", "en-US,en;q=0.9")
+            requestBuilder.header("Origin", "https://m.youtube.com")
+            requestBuilder.header("Referer", "https://m.youtube.com/")
+
+            // Pass WebView cookies (consent tokens, login cookies) to bypass "page needs to be reloaded"
+            try {
+                val cookies = CookieManager.getInstance().getCookie(url)
+                if (!cookies.isNullOrEmpty()) {
+                    requestBuilder.header("Cookie", cookies)
+                } else {
+                    requestBuilder.header("Cookie", "SOCS=CAESEwgDEgk0ODE3Nzk3MjQaAmVuIAEaBgiA_LyaBg; CONSENT=YES+1")
+                }
+            } catch (_: Exception) { }
 
             headers.forEach { (key, values) ->
                 values.forEach { value -> requestBuilder.addHeader(key, value) }

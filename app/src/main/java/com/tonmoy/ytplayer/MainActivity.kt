@@ -8,16 +8,14 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.content.res.Configuration
-import android.graphics.Rect
 import android.os.Build
 import android.os.Bundle
 import android.util.Rational
 import androidx.activity.ComponentActivity
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.tonmoy.ytplayer.ui.MainScreen
@@ -33,6 +31,7 @@ import javax.inject.Inject
  *
  * Responsibilities:
  * - Hosts Jetpack Compose UI content
+ * - Native Back Button handling for YouTube SPA navigation (doesn't exit unexpectedly)
  * - Manages Picture-in-Picture (PiP) mode transitions
  * - Handles WebView lifecycle synchronization
  * - Requests runtime permissions (POST_NOTIFICATIONS on Android 13+)
@@ -66,6 +65,19 @@ class MainActivity : ComponentActivity() {
 
         // Request notification permission on Android 13+
         requestNotificationPermission()
+
+        // Register Back button handler for YouTube web navigation
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                val webView = viewModel?.webViewState?.webView
+                if (webView != null && webView.canGoBack()) {
+                    webView.goBack()
+                } else {
+                    // Minimize app instead of killing when on home page
+                    moveTaskToBack(true)
+                }
+            }
+        })
 
         // Register PiP broadcast receiver
         val filter = IntentFilter().apply {
@@ -108,14 +120,10 @@ class MainActivity : ComponentActivity() {
 
     // ── Picture-in-Picture ──────────────────────────────────────────────
 
-    /**
-     * Auto-enter PiP when user swipes home while a video is detected.
-     * Only available on Android 8.0+ (API 26+).
-     */
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
         val state = viewModel?.uiState?.value
-        // Enter PiP if there's a video playing (in WebView) and not in audio mode
+        // Enter PiP if video is active and not already in audio background mode
         if (state?.currentVideoInfo != null && !state.isAudioMode) {
             enterPipMode()
         }
@@ -126,9 +134,7 @@ class MainActivity : ComponentActivity() {
             try {
                 val params = buildPipParams()
                 enterPictureInPictureMode(params)
-            } catch (e: Exception) {
-                // PiP might not be supported on all devices
-            }
+            } catch (_: Exception) { }
         }
     }
 
@@ -136,7 +142,6 @@ class MainActivity : ComponentActivity() {
         val builder = PictureInPictureParams.Builder()
             .setAspectRatio(Rational(16, 9))
 
-        // Android 12+ (API 31): Enable auto-enter and seamless resize
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             builder.setAutoEnterEnabled(true)
             builder.setSeamlessResizeEnabled(true)
@@ -150,8 +155,7 @@ class MainActivity : ComponentActivity() {
         newConfig: Configuration
     ) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
-        // In PiP mode, the Compose UI will automatically adjust.
-        // The WebView continues to render the video in the small window.
+        viewModel?.setIsInPipMode(isInPictureInPictureMode)
     }
 
     // ── Lifecycle ───────────────────────────────────────────────────────
@@ -159,8 +163,6 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         val state = viewModel?.uiState?.value
-        // Only resume WebView if NOT in audio mode
-        // (in audio mode, WebView is intentionally paused to save battery)
         if (state?.isAudioMode != true) {
             viewModel?.webViewState?.resumeWebView()
         }
@@ -168,11 +170,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onPause() {
         super.onPause()
-        val state = viewModel?.uiState?.value
-        // Don't pause WebView if entering PiP (video should keep playing)
-        if (!isInPictureInPictureMode && state?.isAudioMode != true) {
-            // Let WebView continue running; Android manages it
-        }
+        // Do not kill WebView media playback on pause
     }
 
     override fun onDestroy() {

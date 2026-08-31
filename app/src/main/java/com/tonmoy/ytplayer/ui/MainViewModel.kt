@@ -55,7 +55,9 @@ data class MainUiState(
     /** Total duration in milliseconds. */
     val durationMs: Long = 0L,
     /** Update info if an update is available */
-    val availableUpdate: UpdateInfo? = null
+    val availableUpdate: UpdateInfo? = null,
+    /** Whether activity is currently in Picture-in-Picture mode */
+    val isPipMode: Boolean = false
 )
 
 /**
@@ -127,6 +129,14 @@ class MainViewModel @Inject constructor(
     fun dismissUpdateDialog() {
         _uiState.update { it.copy(availableUpdate = null) }
         updateManager.resetState()
+    }
+
+    fun setIsInPipMode(inPip: Boolean) {
+        _uiState.update { it.copy(isPipMode = inPip) }
+    }
+
+    fun reloadWebView() {
+        webViewState.webView?.reload()
     }
 
     // ── Video Detection from JS Bridge ──────────────────────────────────

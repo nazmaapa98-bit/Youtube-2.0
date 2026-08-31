@@ -1,6 +1,5 @@
 package com.tonmoy.ytplayer.ui
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.RepeatMode
@@ -30,6 +29,7 @@ import androidx.compose.material.icons.filled.Forward10
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Replay10
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.CircularProgressIndicator
@@ -38,6 +38,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -58,17 +59,14 @@ import androidx.compose.ui.unit.sp
 import com.tonmoy.ytplayer.ui.theme.AudioModeGreen
 import com.tonmoy.ytplayer.ui.theme.YTRed
 import com.tonmoy.ytplayer.webview.AdBlockEngine
-import com.tonmoy.ytplayer.webview.WebViewState
 import com.tonmoy.ytplayer.webview.YouTubeWebView
 
 /**
  * Root composable for the main screen.
  *
- * Layers (bottom to top):
- * 1. Full-screen YouTube WebView
- * 2. Mini audio player bar (slides up when audio mode is active)
- * 3. Floating Action Button ("Magic Button") to toggle audio mode
- * 4. Loading overlay during audio extraction
+ * Automatically adapts to:
+ * - PiP Mode: Full screen video without floating controls
+ * - Normal Mode: Full WebView + Magic Button + Refresh Button + Mini Player
  */
 @Composable
 fun MainScreen(
@@ -88,10 +86,19 @@ fun MainScreen(
         }
     }
 
-    // Handle system back button for WebView navigation
-    val canGoBack by viewModel.webViewState.canGoBack.collectAsState()
-    BackHandler(enabled = canGoBack) {
-        viewModel.webViewState.goBack()
+    // In PiP mode, show only the pure video webview without buttons or status bars
+    if (uiState.isPipMode) {
+        Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
+            YouTubeWebView(
+                modifier = Modifier.fillMaxSize(),
+                webViewState = viewModel.webViewState,
+                adBlockEngine = adBlockEngine,
+                onVideoDetected = { videoInfo ->
+                    viewModel.onVideoDetected(videoInfo)
+                }
+            )
+        }
+        return
     }
 
     Scaffold(
@@ -130,19 +137,40 @@ fun MainScreen(
                 )
             }
 
-            // ── Layer 3: Magic Button (FAB) ─────────────────────────
-            MagicFab(
-                isAudioMode = uiState.isAudioMode,
-                isLoading = uiState.isLoading,
-                hasVideo = uiState.currentVideoInfo != null,
-                onClick = { viewModel.toggleAudioMode() },
+            // ── Layer 3: Controls (Refresh + Magic Button) ──────────
+            Column(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(
                         end = 16.dp,
                         bottom = if (uiState.isAudioMode) 88.dp else 24.dp
+                    ),
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // Refresh Button
+                SmallFloatingActionButton(
+                    onClick = { viewModel.reloadWebView() },
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f),
+                    contentColor = MaterialTheme.colorScheme.onSurface,
+                    shape = CircleShape,
+                    modifier = Modifier.size(40.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Refresh,
+                        contentDescription = "Refresh YouTube page",
+                        modifier = Modifier.size(20.dp)
                     )
-            )
+                }
+
+                // Magic Audio Button (FAB)
+                MagicFab(
+                    isAudioMode = uiState.isAudioMode,
+                    isLoading = uiState.isLoading,
+                    hasVideo = uiState.currentVideoInfo != null,
+                    onClick = { viewModel.toggleAudioMode() }
+                )
+            }
 
             // ── Layer 4: Loading Overlay ────────────────────────────
             if (uiState.isLoading) {
@@ -166,14 +194,6 @@ fun MainScreen(
 
 // ── Magic FAB ───────────────────────────────────────────────────────────
 
-/**
- * The "Magic Button" — a FAB that toggles between normal and audio mode.
- *
- * Visual states:
- * - Default: Red with music note icon
- * - Audio mode active: Green with pulsing speaker icon
- * - No video detected: Dimmed appearance
- */
 @Composable
 private fun MagicFab(
     isAudioMode: Boolean,
@@ -192,7 +212,6 @@ private fun MagicFab(
         label = "fab_color"
     )
 
-    // Pulsing animation when audio mode is active
     val infiniteTransition = rememberInfiniteTransition(label = "pulse")
     val pulseScale by infiniteTransition.animateFloat(
         initialValue = 1f,
@@ -231,10 +250,6 @@ private fun MagicFab(
 
 // ── Mini Audio Player ───────────────────────────────────────────────────
 
-/**
- * Bottom bar showing current audio track info with playback controls.
- * Appears with a slide-up animation when audio mode is active.
- */
 @Composable
 private fun MiniAudioPlayer(
     title: String,
@@ -256,7 +271,6 @@ private fun MiniAudioPlayer(
             .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Audio mode indicator
         Box(
             modifier = Modifier
                 .size(40.dp)
@@ -273,7 +287,6 @@ private fun MiniAudioPlayer(
 
         Spacer(modifier = Modifier.width(12.dp))
 
-        // Track info
         Column(
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.Center
@@ -298,7 +311,6 @@ private fun MiniAudioPlayer(
             }
         }
 
-        // Playback controls
         IconButton(onClick = onSeekBack, modifier = Modifier.size(36.dp)) {
             Icon(
                 Icons.Filled.Replay10,
@@ -336,9 +348,6 @@ private fun MiniAudioPlayer(
 
 // ── Loading Overlay ─────────────────────────────────────────────────────
 
-/**
- * Semi-transparent overlay shown during audio stream extraction.
- */
 @Composable
 private fun LoadingOverlay() {
     Box(
