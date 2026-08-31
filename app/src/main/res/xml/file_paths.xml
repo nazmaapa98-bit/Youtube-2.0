@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- For sharing downloaded APK files with the system package installer -->
+    <external-files-path
+        name="downloads"
+        path="Download/" />
+
+    <!-- Fallback: cache directory -->
+    <cache-path
+        name="cache"
+        path="/" />
+</paths>

@@ -1,0 +1,24 @@
+# APK signing (local development)
+*.keystore
+*.jks
+keystore.properties
+
+# Gradle wrapper (generated in CI)
+gradlew
+gradlew.bat
+gradle/wrapper/gradle-wrapper.jar
+
+# Build outputs
+/build
+/app/build
+*.apk
+
+# IDE
+.idea/
+*.iml
+.gradle/
+local.properties
+
+# OS
+.DS_Store
+Thumbs.db

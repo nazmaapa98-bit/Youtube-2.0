@@ -1,0 +1,29 @@
+# YT Player Ad Block Hosts
+# Curated list of ad-serving and tracking domains
+googlesyndication.com
+doubleclick.net
+googleadservices.com
+ad.doubleclick.net
+pagead2.googlesyndication.com
+tpc.googlesyndication.com
+ads.youtube.com
+youtube.cleverads.vn
+googleads.g.doubleclick.net
+static.doubleclick.net
+m.doubleclick.net
+mediavisor.doubleclick.net
+www.googleadservices.com
+partner.googleadservices.com
+www.googletagservices.com
+www.googletagmanager.com
+pagead2.googleadservices.com
+adclick.g.doubleclick.net
+fls.doubleclick.net
+ad.mo.doubleclick.net
+s0.2mdn.net
+z2.2mdn.net
+static.2mdn.net
+tracking.klickly.com
+analytics.google.com
+ssl.google-analytics.com
+www.google-analytics.com

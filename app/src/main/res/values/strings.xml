@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">YT Player</string>
+    <string name="notification_channel_name">Audio Playback</string>
+    <string name="notification_channel_description">Background audio playback controls</string>
+</resources>
