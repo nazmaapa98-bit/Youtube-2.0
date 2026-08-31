@@ -57,17 +57,20 @@ class AudioExtractor @Inject constructor(
 
             // Prefer m4a/AAC formats, then sort by bitrate descending
             val bestStream = audioStreams
-                .filter { it.content != null }
+                .filter { it.content != null && it.content.isNotEmpty() }
                 .sortedWith(compareByDescending<org.schabi.newpipe.extractor.stream.AudioStream> { 
                     it.format == org.schabi.newpipe.extractor.MediaFormat.M4A
                 }.thenByDescending { it.bitrate })
                 .firstOrNull()
                 ?: return@withContext Result.failure(Exception("No valid audio streams available"))
 
-            val title = extractor.name ?: ""
-            val channelName = extractor.uploaderName ?: ""
-            val thumbnailUrl = extractor.thumbnails?.firstOrNull()?.url ?: ""
-            val duration = extractor.length
+            val title = try { extractor.name ?: "" } catch (_: Exception) { "" }
+            val channelName = try { extractor.uploaderName ?: "" } catch (_: Exception) { "" }
+            val thumbnailUrl = try {
+                extractor.thumbnails?.firstOrNull()?.url ?: ""
+            } catch (_: Exception) { "" }
+            val duration = try { extractor.length } catch (_: Exception) { 0L }
+            val formatName = try { bestStream.format?.name ?: "M4A" } catch (_: Exception) { "M4A" }
 
             val info = AudioStreamInfo(
                 streamUrl = bestStream.content,
@@ -76,7 +79,7 @@ class AudioExtractor @Inject constructor(
                 thumbnailUrl = thumbnailUrl,
                 duration = duration,
                 bitrate = bestStream.bitrate,
-                format = bestStream.format?.name ?: "Unknown"
+                format = formatName
             )
             Result.success(info)
         } catch (e: Exception) {

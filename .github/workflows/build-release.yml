@@ -64,7 +64,9 @@ jobs:
 
       - name: Rename APK
         run: |
-          mv app/build/outputs/apk/release/app-release.apk app/build/outputs/apk/release/YTPlayer-v${{ steps.version.outputs.version_name }}.apk
+          APK_FILE=$(find app/build/outputs/apk/release/ -name "*.apk" | head -1)
+          echo "Found APK at: $APK_FILE"
+          cp "$APK_FILE" app/build/outputs/apk/release/YTPlayer-v${{ steps.version.outputs.version_name }}.apk
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
