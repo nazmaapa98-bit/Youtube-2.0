@@ -51,7 +51,7 @@ jobs:
           STORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD || 'ytplayer123' }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS || 'ytplayer' }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || 'ytplayer123' }}
-        run: gradle assembleRelease
+        run: gradle assembleRelease --stacktrace
 
       - name: Extract version info
         id: version

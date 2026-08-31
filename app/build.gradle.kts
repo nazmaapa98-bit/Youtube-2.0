@@ -34,8 +34,7 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = true
-            isShrinkResources = true
+            isMinifyEnabled = false
             signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -44,7 +43,7 @@ android {
         }
         debug {
             isMinifyEnabled = false
-            // No applicationIdSuffix — same package ID so updates work seamlessly
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 
