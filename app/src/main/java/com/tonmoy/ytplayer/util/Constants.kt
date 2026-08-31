@@ -12,9 +12,8 @@ object Constants {
     const val YOUTUBE_DESKTOP_URL = "https://www.youtube.com"
 
     // ── GitHub Repository (for in-app updates) ──────────────────────────
-    // TODO: Replace with your actual GitHub username and repo name
-    const val GITHUB_OWNER = "YOUR_GITHUB_USERNAME"
-    const val GITHUB_REPO = "YT-Player"
+    const val GITHUB_OWNER = "nazmaapa98-bit"
+    const val GITHUB_REPO = "Youtube-2.0"
 
     /**
      * Sanitized Chrome mobile User-Agent string.
