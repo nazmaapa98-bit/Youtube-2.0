@@ -133,6 +133,7 @@ class MainViewModel @Inject constructor(
 
     fun setIsInPipMode(inPip: Boolean) {
         _uiState.update { it.copy(isPipMode = inPip) }
+        webViewState.evaluateJavascript("ytSetPipFullscreen($inPip)")
     }
 
     fun reloadWebView() {
@@ -153,18 +154,7 @@ class MainViewModel @Inject constructor(
     // ── Audio Mode Toggle ───────────────────────────────────────────────
 
     /**
-     * Toggles audio-only background mode.
-     *
-     * When activating:
-     * 1. Pauses the WebView video
-     * 2. Extracts audio-only stream URL via NewPipe Extractor
-     * 3. Starts playback in the foreground service
-     * 4. Pauses WebView rendering to save battery
-     *
-     * When deactivating:
-     * 1. Stops background audio
-     * 2. Resumes WebView rendering
-     * 3. Optionally resumes WebView video playback
+     * Toggles between normal WebView video mode and audio-only background mode.
      */
     fun toggleAudioMode() {
         val current = _uiState.value
@@ -186,7 +176,7 @@ class MainViewModel @Inject constructor(
 
         _uiState.update { it.copy(isLoading = true, errorMessage = null) }
 
-        // Step 1: Pause the WebView video
+        // Step 1: Pause the WebView video initially while attempting pure stream extraction
         webViewState.pauseVideo()
 
         // Step 2: Extract audio stream and start playback
@@ -196,13 +186,12 @@ class MainViewModel @Inject constructor(
             result.onSuccess { streamInfo ->
                 Log.d(TAG, "Audio stream extracted: ${streamInfo.format} @ ${streamInfo.bitrate}kbps")
 
-                // Step 3: Build MediaItem and start playback
                 val mediaItem = PlaybackService.buildMediaItem(
-                    title = streamInfo.title,
+                    title = streamInfo.title.ifEmpty { videoInfo.title },
                     channelName = streamInfo.channelName,
                     streamUrl = streamInfo.streamUrl,
                     thumbnailUrl = streamInfo.thumbnailUrl,
-                    duration = streamInfo.duration * 1000L
+                    duration = if (streamInfo.duration > 0) streamInfo.duration * 1000L else (videoInfo.duration * 1000).toLong()
                 )
 
                 mediaController?.let { controller ->
@@ -211,7 +200,7 @@ class MainViewModel @Inject constructor(
                     controller.play()
                 }
 
-                // Step 4: Pause WebView rendering to save battery
+                // Pause WebView rendering to save maximum battery and data
                 webViewState.pauseWebView()
 
                 _uiState.update {
@@ -219,31 +208,41 @@ class MainViewModel @Inject constructor(
                         isAudioMode = true,
                         isLoading = false,
                         isPlaying = true,
-                        playingTitle = streamInfo.title,
+                        playingTitle = streamInfo.title.ifEmpty { videoInfo.title },
                         playingChannel = streamInfo.channelName,
-                        durationMs = streamInfo.duration * 1000L
+                        durationMs = if (streamInfo.duration > 0) streamInfo.duration * 1000L else (videoInfo.duration * 1000).toLong()
                     )
                 }
 
                 _events.emit(
                     MainUiEvent.ShowMessage(
-                        "🎵 Audio mode: Playing \"${streamInfo.title}\" (${streamInfo.format} @ ${streamInfo.bitrate}kbps)"
+                        "🎵 Audio mode: Playing in background"
                     )
                 )
 
             }.onFailure { error ->
-                Log.e(TAG, "Failed to extract audio stream", error)
+                Log.w(TAG, "Direct audio extraction skipped, using WebView 144p background audio mode", error)
+                
+                // Fallback to WebView Background Mode with 144p data saving
+                webViewState.evaluateJavascript("ytSetLowQuality()")
+                webViewState.playVideo()
+
                 _uiState.update {
                     it.copy(
+                        isAudioMode = true,
                         isLoading = false,
-                        errorMessage = "Failed to extract audio: ${error.message}"
+                        isPlaying = true,
+                        playingTitle = videoInfo.title,
+                        playingChannel = "Background Audio Mode",
+                        durationMs = (videoInfo.duration * 1000).toLong()
                     )
                 }
+
                 _events.emit(
-                    MainUiEvent.ShowError("Audio extraction failed: ${error.localizedMessage}")
+                    MainUiEvent.ShowMessage(
+                        "🎵 Audio Saver Mode: Playing in background"
+                    )
                 )
-                // Resume WebView since we failed
-                webViewState.playVideo()
             }
         }
     }
@@ -252,7 +251,7 @@ class MainViewModel @Inject constructor(
      * Stops audio-only mode and returns to WebView.
      */
     fun stopAudioMode() {
-        // Stop background audio
+        // Stop background audio if ExoPlayer was playing
         mediaController?.let { controller ->
             controller.stop()
             controller.clearMediaItems()
@@ -276,31 +275,57 @@ class MainViewModel @Inject constructor(
 
     // ── Playback Controls ───────────────────────────────────────────────
 
-    /** Toggle play/pause in the background service. */
+    /** Toggle play/pause in the background service or WebView. */
     fun togglePlayPause() {
-        mediaController?.let { controller ->
-            if (controller.isPlaying) {
-                controller.pause()
+        if (mediaController?.currentMediaItem != null) {
+            mediaController?.let { controller ->
+                if (controller.isPlaying) {
+                    controller.pause()
+                } else {
+                    controller.play()
+                }
+            }
+        } else {
+            if (_uiState.value.isPlaying) {
+                webViewState.pauseVideo()
+                _uiState.update { it.copy(isPlaying = false) }
             } else {
-                controller.play()
+                webViewState.playVideo()
+                _uiState.update { it.copy(isPlaying = true) }
             }
         }
     }
 
     /** Seek forward by 10 seconds. */
     fun seekForward() {
-        mediaController?.let { controller ->
-            val newPos = (controller.currentPosition + 10_000L)
-                .coerceAtMost(controller.duration)
-            controller.seekTo(newPos)
+        if (mediaController?.currentMediaItem != null) {
+            mediaController?.let { controller ->
+                val newPos = (controller.currentPosition + 10_000L)
+                    .coerceAtMost(controller.duration)
+                controller.seekTo(newPos)
+            }
+        } else {
+            webViewState.evaluateJavascript("ytGetCurrentTime()") { timeStr ->
+                val clean = timeStr?.replace("\"", "")?.trim()
+                val curr = clean?.toDoubleOrNull() ?: 0.0
+                webViewState.evaluateJavascript("ytSeekTo(${curr + 10.0})")
+            }
         }
     }
 
     /** Seek backward by 10 seconds. */
     fun seekBackward() {
-        mediaController?.let { controller ->
-            val newPos = (controller.currentPosition - 10_000L).coerceAtLeast(0L)
-            controller.seekTo(newPos)
+        if (mediaController?.currentMediaItem != null) {
+            mediaController?.let { controller ->
+                val newPos = (controller.currentPosition - 10_000L).coerceAtLeast(0L)
+                controller.seekTo(newPos)
+            }
+        } else {
+            webViewState.evaluateJavascript("ytGetCurrentTime()") { timeStr ->
+                val clean = timeStr?.replace("\"", "")?.trim()
+                val curr = clean?.toDoubleOrNull() ?: 0.0
+                webViewState.evaluateJavascript("ytSeekTo(${maxOf(0.0, curr - 10.0)})")
+            }
         }
     }
 

@@ -60,6 +60,46 @@ function ytSeekTo(seconds) {
     }
 }
 
+function ytSetLowQuality() {
+    try {
+        const moviePlayer = document.getElementById('movie_player');
+        if (moviePlayer && typeof moviePlayer.setPlaybackQualityRange === 'function') {
+            moviePlayer.setPlaybackQualityRange('tiny', 'tiny');
+        }
+    } catch (e) {
+        console.error('Error setting low quality:', e);
+    }
+}
+
+function ytSetPipFullscreen(enable) {
+    try {
+        const video = document.querySelector('video');
+        if (video) {
+            if (enable) {
+                video.style.position = 'fixed';
+                video.style.top = '0';
+                video.style.left = '0';
+                video.style.width = '100vw';
+                video.style.height = '100vh';
+                video.style.zIndex = '9999999';
+                video.style.objectFit = 'contain';
+                video.style.backgroundColor = '#000';
+            } else {
+                video.style.position = '';
+                video.style.top = '';
+                video.style.left = '';
+                video.style.width = '';
+                video.style.height = '';
+                video.style.zIndex = '';
+                video.style.objectFit = '';
+                video.style.backgroundColor = '';
+            }
+        }
+    } catch (e) {
+        console.error('Error adjusting PiP layout:', e);
+    }
+}
+
 function ytGetPlaybackState() {
     try {
         let state = {
