@@ -1,5 +1,6 @@
 # APK signing (local development)
 *.keystore
+!app/release.keystore
 *.jks
 keystore.properties
 
