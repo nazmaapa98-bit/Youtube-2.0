@@ -29,6 +29,9 @@ fun YouTubeWebView(
                     ViewGroup.LayoutParams.MATCH_PARENT
                 )
                 
+                setBackgroundColor(android.graphics.Color.BLACK)
+                setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null)
+                
                 settings.apply {
                     javaScriptEnabled = true
                     domStorageEnabled = true

@@ -7,6 +7,8 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
@@ -64,7 +66,7 @@ import com.tonmoy.ytplayer.webview.YouTubeWebView
 /**
  * Root composable for the main screen.
  *
- * Automatically adapts to:
+ * Automatically adapts without unmounting the WebView:
  * - PiP Mode: Full screen video without floating controls
  * - Normal Mode: Full WebView + Magic Button + Refresh Button + Mini Player
  */
@@ -86,30 +88,20 @@ fun MainScreen(
         }
     }
 
-    // In PiP mode, show only the pure video webview without buttons or status bars
-    if (uiState.isPipMode) {
-        Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
-            YouTubeWebView(
-                modifier = Modifier.fillMaxSize(),
-                webViewState = viewModel.webViewState,
-                adBlockEngine = adBlockEngine,
-                onVideoDetected = { videoInfo ->
-                    viewModel.onVideoDetected(videoInfo)
-                }
-            )
-        }
-        return
-    }
-
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) }
+        snackbarHost = {
+            if (!uiState.isPipMode) {
+                SnackbarHost(snackbarHostState)
+            }
+        }
     ) { paddingValues ->
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues)
+                .background(Color.Black)
+                .then(if (!uiState.isPipMode) Modifier.padding(paddingValues) else Modifier)
         ) {
-            // ── Layer 1: YouTube WebView ────────────────────────────
+            // ── Layer 1: Persistent YouTube WebView (NEVER RECREATED) ──
             YouTubeWebView(
                 modifier = Modifier.fillMaxSize(),
                 webViewState = viewModel.webViewState,
@@ -119,9 +111,9 @@ fun MainScreen(
                 }
             )
 
-            // ── Layer 2: Mini Audio Player Bar ──────────────────────
+            // ── Layer 2: Mini Audio Player Bar (Hidden in PiP) ───────
             AnimatedVisibility(
-                visible = uiState.isAudioMode,
+                visible = uiState.isAudioMode && !uiState.isPipMode,
                 enter = slideInVertically(initialOffsetY = { it }),
                 exit = slideOutVertically(targetOffsetY = { it }),
                 modifier = Modifier.align(Alignment.BottomCenter)
@@ -137,56 +129,64 @@ fun MainScreen(
                 )
             }
 
-            // ── Layer 3: Controls (Refresh + Magic Button) ──────────
-            Column(
+            // ── Layer 3: Controls (Refresh + Magic Button, Hidden in PiP)
+            AnimatedVisibility(
+                visible = !uiState.isPipMode,
+                enter = fadeIn(),
+                exit = fadeOut(),
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(
                         end = 16.dp,
                         bottom = if (uiState.isAudioMode) 88.dp else 24.dp
-                    ),
-                horizontalAlignment = Alignment.End,
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                    )
             ) {
-                // Refresh Button
-                SmallFloatingActionButton(
-                    onClick = { viewModel.reloadWebView() },
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f),
-                    contentColor = MaterialTheme.colorScheme.onSurface,
-                    shape = CircleShape,
-                    modifier = Modifier.size(40.dp)
+                Column(
+                    horizontalAlignment = Alignment.End,
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Filled.Refresh,
-                        contentDescription = "Refresh YouTube page",
-                        modifier = Modifier.size(20.dp)
+                    // Refresh Button
+                    SmallFloatingActionButton(
+                        onClick = { viewModel.reloadWebView() },
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f),
+                        contentColor = MaterialTheme.colorScheme.onSurface,
+                        shape = CircleShape,
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Refresh,
+                            contentDescription = "Refresh YouTube page",
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+
+                    // Magic Audio Button (FAB)
+                    MagicFab(
+                        isAudioMode = uiState.isAudioMode,
+                        isLoading = uiState.isLoading,
+                        hasVideo = uiState.currentVideoInfo != null,
+                        onClick = { viewModel.toggleAudioMode() }
                     )
                 }
-
-                // Magic Audio Button (FAB)
-                MagicFab(
-                    isAudioMode = uiState.isAudioMode,
-                    isLoading = uiState.isLoading,
-                    hasVideo = uiState.currentVideoInfo != null,
-                    onClick = { viewModel.toggleAudioMode() }
-                )
             }
 
-            // ── Layer 4: Loading Overlay ────────────────────────────
-            if (uiState.isLoading) {
+            // ── Layer 4: Loading Overlay (Hidden in PiP) ────────────
+            if (uiState.isLoading && !uiState.isPipMode) {
                 LoadingOverlay()
             }
 
-            // ── Layer 5: In-App Update Dialog ───────────────────────
-            uiState.availableUpdate?.let { updateInfo ->
-                val downloadState by viewModel.downloadState.collectAsState()
-                com.tonmoy.ytplayer.update.UpdateDialog(
-                    updateInfo = updateInfo,
-                    downloadState = downloadState,
-                    onDownload = { viewModel.startUpdateDownload() },
-                    onInstall = { file -> viewModel.installUpdate(file) },
-                    onDismiss = { viewModel.dismissUpdateDialog() }
-                )
+            // ── Layer 5: In-App Update Dialog (Hidden in PiP) ───────
+            if (!uiState.isPipMode) {
+                uiState.availableUpdate?.let { updateInfo ->
+                    val downloadState by viewModel.downloadState.collectAsState()
+                    com.tonmoy.ytplayer.update.UpdateDialog(
+                        updateInfo = updateInfo,
+                        downloadState = downloadState,
+                        onDownload = { viewModel.startUpdateDownload() },
+                        onInstall = { file -> viewModel.installUpdate(file) },
+                        onDismiss = { viewModel.dismissUpdateDialog() }
+                    )
+                }
             }
         }
     }
