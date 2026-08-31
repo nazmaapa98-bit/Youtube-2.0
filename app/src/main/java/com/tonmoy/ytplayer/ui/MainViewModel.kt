@@ -192,7 +192,7 @@ class MainViewModel @Inject constructor(
                     channelName = streamInfo.channelName,
                     streamUrl = streamInfo.streamUrl,
                     thumbnailUrl = streamInfo.thumbnailUrl,
-                    durationMs = streamInfo.duration * 1000L
+                    duration = streamInfo.duration * 1000L
                 )
 
                 mediaController?.let { controller ->

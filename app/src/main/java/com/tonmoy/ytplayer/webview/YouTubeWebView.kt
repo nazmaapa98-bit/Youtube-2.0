@@ -42,9 +42,10 @@ fun YouTubeWebView(
                     useWideViewPort = true
                 }
                 
+                val currentWebView = this
                 CookieManager.getInstance().apply {
                     setAcceptCookie(true)
-                    setAcceptThirdPartyCookies(this@apply, true)
+                    setAcceptThirdPartyCookies(currentWebView, true)
                 }
                 
                 addJavascriptInterface(
