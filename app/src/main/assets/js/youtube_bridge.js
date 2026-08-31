@@ -1,3 +1,32 @@
+// Background Playback & Visibility Spoofing
+// Prevents YouTube from detecting screen off or app minimizing
+try {
+    Object.defineProperty(document, 'hidden', {
+        get: function() { return false; },
+        configurable: true
+    });
+    Object.defineProperty(document, 'visibilityState', {
+        get: function() { return 'visible'; },
+        configurable: true
+    });
+    Object.defineProperty(document, 'webkitVisibilityState', {
+        get: function() { return 'visible'; },
+        configurable: true
+    });
+
+    // Intercept and stop propagation of visibilitychange, blur, and pagehide events
+    ['visibilitychange', 'webkitvisibilitychange', 'blur', 'pagehide'].forEach(function(evt) {
+        window.addEventListener(evt, function(e) {
+            e.stopImmediatePropagation();
+        }, true);
+        document.addEventListener(evt, function(e) {
+            e.stopImmediatePropagation();
+        }, true);
+    });
+} catch(e) {
+    console.error('Error spoofing visibility:', e);
+}
+
 if (!window._ytBridgeInitialized) {
     window._ytBridgeInitialized = true;
 

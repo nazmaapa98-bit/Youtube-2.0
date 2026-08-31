@@ -1,11 +1,27 @@
+// Prevent YouTube background suspension when in Audio Mode
+window._ytAudioBackgroundMode = false;
+
+(function() {
+    const originalPause = HTMLMediaElement.prototype.pause;
+    HTMLMediaElement.prototype.pause = function() {
+        if (window._ytAudioBackgroundMode && !this.ended) {
+            // When user explicitly requested audio background mode, ignore OS background blur pauses
+            console.log('Ignored pause call during background audio mode');
+            return;
+        }
+        return originalPause.apply(this, arguments);
+    };
+})();
+
 function ytPauseVideo() {
     try {
+        window._ytAudioBackgroundMode = false;
         const moviePlayer = document.getElementById('movie_player');
         if (moviePlayer && typeof moviePlayer.pauseVideo === 'function') {
             moviePlayer.pauseVideo();
         } else {
             const video = document.querySelector('video');
-            if (video) video.pause();
+            if (video) HTMLMediaElement.prototype.pause.call(video);
         }
     } catch (e) {
         console.error('Error pausing video:', e);
@@ -62,6 +78,7 @@ function ytSeekTo(seconds) {
 
 function ytSetLowQuality() {
     try {
+        window._ytAudioBackgroundMode = true;
         const moviePlayer = document.getElementById('movie_player');
         if (moviePlayer && typeof moviePlayer.setPlaybackQualityRange === 'function') {
             moviePlayer.setPlaybackQualityRange('tiny', 'tiny');

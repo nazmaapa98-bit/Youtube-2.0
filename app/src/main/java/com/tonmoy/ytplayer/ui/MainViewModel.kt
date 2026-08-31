@@ -77,7 +77,8 @@ class MainViewModel @Inject constructor(
     val webViewState: WebViewState,
     private val audioExtractor: AudioExtractor,
     private val updateChecker: UpdateChecker,
-    private val updateManager: UpdateManager
+    private val updateManager: UpdateManager,
+    private val wakeLockManager: WakeLockManager
 ) : ViewModel() {
 
     companion object {
@@ -226,6 +227,7 @@ class MainViewModel @Inject constructor(
                 // Fallback to WebView Background Mode with 144p data saving
                 webViewState.evaluateJavascript("ytSetLowQuality()")
                 webViewState.playVideo()
+                wakeLockManager.acquire()
 
                 _uiState.update {
                     it.copy(
@@ -251,6 +253,8 @@ class MainViewModel @Inject constructor(
      * Stops audio-only mode and returns to WebView.
      */
     fun stopAudioMode() {
+        wakeLockManager.release()
+
         // Stop background audio if ExoPlayer was playing
         mediaController?.let { controller ->
             controller.stop()
@@ -391,6 +395,7 @@ class MainViewModel @Inject constructor(
 
     override fun onCleared() {
         super.onCleared()
+        wakeLockManager.release()
         mediaControllerFuture?.let { MediaController.releaseFuture(it) }
         mediaController = null
     }
